@@ -27,6 +27,9 @@ _Avoid_: "graph" (it is a one-row glyph strip, not a plotted axis), and the old 
 **Day Stats Toggle**:
 The `show_day_stats` **Config** knob (`YAS_SHOW_DAY_STATS`, `[tokens].show_day_stats`, default on). When off, the tokens row drops every `/day` figure and the day cost, rendering session-only; the three-column structure and the **Token-Rate Sparkline** are unchanged.
 
+**Cost Toggle**:
+The `show_cost` **Config** knob (`YAS_SHOW_COST`, `[tokens].show_cost`, default **off**). When off, the tokens row's cost column is dropped entirely (not shed by width — a permanent omission) and any trailing skills+plugins segment attaches directly to the previous divider; when on, the cost column (`$<sess> / $<day>`, or `$<sess>` alone with **Day Stats Toggle** off) reappears.
+
 **Cache Countdown**:
 The time remaining before this session's prompt cache expires, shown as `<cache-glyph> <MM:SS>` (e.g. `03:07`, `00:42`), rolling to `H:MM:SS` at or above 3600 s, in its own vsep-delimited section on the path/model row, between the rate-limit helper and the model pill. The anchor is the `timestamp` of the most recent transcript line that touched the prompt cache (`cache_read_input_tokens > 0` or `cache_creation_input_tokens > 0`); `remaining = ttl − (now − anchor)`. The **Cache TTL** is 300 s by default, 3600 s when the anchor line wrote to the 1-hour ephemeral tier (`cache_creation.ephemeral_1h_input_tokens > 0`). Re-derived from the transcript every render against the frozen `now` — no per-session state file. The figure is coloured by `fill_colour(elapsed_pct)` where `elapsed_pct = 100 − round(remaining·100/ttl)`, so it runs green when fresh → red near expiry (the same safe/warn/alert ladder as the rate-limit percentages). The whole section — divider included — is hidden when there has never been a cache event, when `remaining ≤ 0` (expired), or when the row is too narrow to fit it (it sheds first, before the path truncates).
 _Avoid_: "Cache Read" (that is the `cache_read_input_tokens` token figure in the tokens row — a token count, not a time), and "cache TTL" as the *displayed* term (the **Cache TTL** is the 300/3600 s lifetime constant; the **Cache Countdown** is the live remaining time derived from it).
@@ -224,7 +227,7 @@ Suppressed when: `resets_at == 0` (no window), window expired, or within warmup 
 ### Configuration
 
 **Config**:
-The frozen dataclass (`Config` in `claude/statusline_command.py`, built once via `Config.load`) that holds every resolved knob: `max_width`, `full_width`, `soft_limit`, `token_window`, `theme`, `bg_shift`, `glyph_mode`, `single_width`, `show_day_stats`, `justify`, `labels` (**Section Labels**), plus the per-model `soft_limit` overrides. Each knob is resolved independently through one fixed **Precedence Chain**, so one bad value never disturbs the others.
+The frozen dataclass (`Config` in `claude/statusline_command.py`, built once via `Config.load`) that holds every resolved knob: `max_width`, `full_width`, `soft_limit`, `token_window`, `theme`, `bg_shift`, `glyph_mode`, `single_width`, `show_day_stats`, `show_cost`, `justify`, `labels` (**Section Labels**), plus the per-model `soft_limit` overrides. Each knob is resolved independently through one fixed **Precedence Chain**, so one bad value never disturbs the others.
 _Avoid_: "settings" (overloaded with Claude Code's `settings.json`, which is unrelated — `Config` reads `yas.toml` and `YAS_*` env vars).
 
 **Glyph Mode**:
@@ -295,7 +298,7 @@ _Avoid_: "gather the day total" (the **Day Total** is *written*, not gathered �
 
 ## Relationships
 
-- **Billed Input** + **Cache Read** + **Output** are the three fields of the single-line tokens row. Each merges this session with its **Day Total** counterpart as `session/day` (`↓ <sess>/<day> (<sess_cache>/<day_cache>) ↑ <sess>/<day>`); cost is `$<sess> / $<day>`. The **Day Stats Toggle** (`show_day_stats=false`) drops every `/day` half, leaving the session-only form.
+- **Billed Input** + **Cache Read** + **Output** are the three fields of the single-line tokens row. Each merges this session with its **Day Total** counterpart as `session/day` (`↓ <sess>/<day> (<sess_cache>/<day_cache>) ↑ <sess>/<day>`); cost is `$<sess> / $<day>`. The **Day Stats Toggle** (`show_day_stats=false`) drops every `/day` half, leaving the session-only form. The **Cost Toggle** (`show_cost=false`, the default) drops the cost column entirely, independent of `show_day_stats`.
 - The bar's *length* and *colour* both track raw consumption against the **Soft Limit** / **Compaction-Risk Zone** (length = `used_tokens / soft_limit`, full at 150K). The model's **Context Window Size** drives only the secondary `(N%)` headroom figure in parentheses — so a 1M-context model can show a full bar while still having window headroom.
 - The skills/plugins row is always rendered; when both lists are empty it shows `*none*` under each icon to preserve layout.
 

@@ -70,7 +70,7 @@ def test_justify_box_all_rows_uniform_width(
 ) -> None:
     """With cfg.justify=True every rendered row is exactly `width` columns wide."""
     _silence_dynamic(monkeypatch)
-    view = _view(Config(justify=True))
+    view = _view(Config(justify=True, show_cost=True))
     lines = _rendered_lines(view, width)
     widths = {_visible_width(strip_ansi(ln)) for ln in lines}
     assert widths == {width}, f'mismatched row widths at terminal {width}: {widths}'
@@ -82,7 +82,7 @@ def test_justify_top_content_row_is_width_wide(
     """The top content row (index 1) rendered with justify=True is exactly ``width`` columns."""
     _silence_dynamic(monkeypatch)
     width = 160
-    view = _view(Config(justify=True))
+    view = _view(Config(justify=True, show_cost=True))
     lines = [strip_ansi(ln) for ln in _rendered_lines(view, width)]
     assert _visible_width(lines[1]) == width
 
@@ -113,8 +113,8 @@ def test_justify_slack_zero_matches_unjustified(
         lambda self, pwd, git, target_w, compact_only=False, show_icons=True: 'x' * max(0, target_w),
     )
     session = _session()
-    view_on  = SessionView(session, Config(justify=True))
-    view_off = SessionView(session, Config(justify=False))
+    view_on  = SessionView(session, Config(justify=True, show_cost=True))
+    view_off = SessionView(session, Config(justify=False, show_cost=True))
 
     # The tokens │ cost │ rate row is the final block (its content row plus the
     # separator above and bottom border below). Its dividers — and therefore the
@@ -136,8 +136,8 @@ def test_justify_n3_path_wider_than_unjustified(
     concentrated in the gap before the right pill/text)."""
     _silence_dynamic(monkeypatch)
     width = 160
-    view_on  = _view(Config(justify=True))
-    view_off = _view(Config(justify=False))
+    view_on  = _view(Config(justify=True, show_cost=True))
+    view_off = _view(Config(justify=False, show_cost=True))
 
     def _path_end_col(lines: list[str]) -> int:
         # Strip ANSI and find the first interior │ after the lead border.
@@ -161,7 +161,7 @@ def test_justify_n3_box_intact(
     """N=3 distribution (no elapsed, no cache) keeps the box intact."""
     _silence_dynamic(monkeypatch)
     width = 160
-    view = _view(Config(justify=True))
+    view = _view(Config(justify=True, show_cost=True))
     lines = [strip_ansi(ln) for ln in _rendered_lines(view, width)]
     widths = {_visible_width(ln) for ln in lines}
     assert widths == {width}
@@ -181,8 +181,8 @@ def test_justify_path_extra_split_around_git_block(
     width = 160
 
     # Render unjustified first so we know the natural position of ∈.
-    raw_off = strip_ansi(_rendered_lines(_view(Config(justify=False)), width)[1])
-    raw_on  = strip_ansi(_rendered_lines(_view(Config(justify=True)),  width)[1])
+    raw_off = strip_ansi(_rendered_lines(_view(Config(justify=False, show_cost=True)), width)[1])
+    raw_on  = strip_ansi(_rendered_lines(_view(Config(justify=True, show_cost=True)),  width)[1])
 
     sep = '∈'
     idx_off = raw_off.find(sep)
@@ -220,7 +220,7 @@ def test_justify_elapsed_field_balanced(
 
     tested = 0
     for width in (100, 102, 104, 108, 111, 112, 113, 115, 120):
-        view = _view(Config(justify=True))
+        view = _view(Config(justify=True, show_cost=True))
         raw = strip_ansi(_rendered_lines(view, width)[1])
         pipes = [i for i, ch in enumerate(raw) if ch == '│']
         assert len(pipes) >= 3, f'width={width} raw={raw!r}'
@@ -259,7 +259,7 @@ def test_justify_elapsed_field_balanced_at_zero_slack(
 
     tested = 0
     for width in (65, 66, 77, 78):
-        view = _view(Config(justify=True))
+        view = _view(Config(justify=True, show_cost=True))
         spec = layout.build_wide(view, _tick(), width, _r)
         raw  = strip_ansi(layout.render_layout(spec, _r)[1])
         pipes = [i for i, ch in enumerate(raw) if ch == '│']
@@ -290,8 +290,8 @@ def test_justify_widens_helper_inter_stat_gap(
         i = raw.index('61.0%') + len('61.0%')
         return len(raw[i:]) - len(raw[i:].lstrip(' '))
 
-    gap_off = _gap(_rendered_lines(_view(Config(justify=False)), width))
-    gap_on  = _gap(_rendered_lines(_view(Config(justify=True)),  width))
+    gap_off = _gap(_rendered_lines(_view(Config(justify=False, show_cost=True)), width))
+    gap_on  = _gap(_rendered_lines(_view(Config(justify=True, show_cost=True)),  width))
     assert gap_off == 1
     assert 1 < gap_on <= 3
 
@@ -316,7 +316,7 @@ def test_no_digit_adjacent_to_border(
     digit_touches_border = re.compile(r'\d[│|]|[│|]\d')
 
     for width in range(60, 131):
-        view = _view(Config(justify=justify, glyph_mode='ascii'))
+        view = _view(Config(justify=justify, glyph_mode='ascii', show_cost=True))
         for line in _rendered_lines(view, width):
             raw = strip_ansi(line)
             assert not digit_touches_border.search(raw), (

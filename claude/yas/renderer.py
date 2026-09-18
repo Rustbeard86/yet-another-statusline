@@ -1703,7 +1703,7 @@ class Renderer:
     # after every cap is met still feeds the rate/sparkline leader (as before).
     JUSTIFY_PAD_CAP = 4
 
-    def tokens_cost(self, sess_in: int, sess_cache: int, sess_out: int, day_in: int, day_cache: int, day_out: int, sess_cost: float, day_cost: float, trailing_content: str = '', session_id: str = '', box_width: int = 80, fill: float = 1.0, show_day_stats: bool = True, justify: bool = False, lines: tuple[int, int] | None = None, show_icons: bool = True) -> tuple[list[str], tuple[int, ...], int, int, bool]:
+    def tokens_cost(self, sess_in: int, sess_cache: int, sess_out: int, day_in: int, day_cache: int, day_out: int, sess_cost: float, day_cost: float, trailing_content: str = '', session_id: str = '', box_width: int = 80, fill: float = 1.0, show_day_stats: bool = True, justify: bool = False, lines: tuple[int, int] | None = None, show_icons: bool = True, show_cost: bool = True) -> tuple[list[str], tuple[int, ...], int, int, bool]:
         """One content line: tokens │ [lines │] cost │ [trailing_content].
 
         Invariants:
@@ -1729,6 +1729,11 @@ class Renderer:
           overflows ``box_width``): tokens sess/day (never shed) ← loc r/w ←
           cost ← trailing content. Each rung drops exactly one segment;
           ``vsep_cols`` shrinks by one column per rung dropped.
+        - ``show_cost`` (config-gated, default off) drops the cost column
+          entirely -- not a shed rung, a permanent omission. When it's off
+          and ``trailing_content`` is included, trailing attaches directly
+          to the previous divider (lines│, or tokens│ with no lines) rather
+          than gaining its own empty-celled cost divider.
 
         Returns ``([line], vsep_cols, 0, min_width, has_lines)`` — the dead
         mark_col (=0) is a leftover 5-tuple slot; ``min_width`` is the floor
@@ -1843,6 +1848,8 @@ class Renderer:
         # returned to the caller (see ``min_width`` below) so the builder can fall
         # back to a compact form rather than overflow the box.
         tokens_w = _visible_width(tokens_col)
+        if not show_cost:
+            cost_col = ''
         cost_w   = _visible_width(cost_col)
         # Unpadded (pre-justify) tokens width -- this is the row's true floor:
         # tokens sess/day is the protected survivor of the shed ladder below,
@@ -1905,7 +1912,11 @@ class Renderer:
             # (slot extra above its 1-space/0-space minimum, per-slot cap).
             #  gap1, gap2 sit at 1 already → extra cap is cap-1; the edge pads
             #  sit at 0 → extra cap is the full cap.
-            slots = [cap - 1, cap - 1, cap, cap]  # gap1, gap2, cost_l, cost_r
+            # cost_l/cost_r get no slot when the cost column is hidden --
+            # padding a column that's about to be discarded would move
+            # `tokens_w`/`cost_w` off their honest floor for no visible gain.
+            cost_cap = cap if show_cost else 0
+            slots = [cap - 1, cap - 1, cost_cap, cost_cap]  # gap1, gap2, cost_l, cost_r
             give  = [0, 0, 0, 0]
             budget = min(free, sum(slots))
             while budget > 0 and any(give[i] < slots[i] for i in range(len(slots))):
@@ -1924,7 +1935,7 @@ class Renderer:
             # divider positions exactly. min_width above stays on the unpadded
             # floor.
             tokens_col = build_tokens()
-            cost_col   = build_cost()
+            cost_col   = build_cost() if show_cost else ''
             tokens_w  += give[0] + give[1]
             cost_w    += give[2] + give[3]
 
@@ -1983,7 +1994,17 @@ class Renderer:
                 trailing = ''
 
         vsep_cols: tuple[int, ...]
-        if include_trailing:
+        if include_trailing and not show_cost:
+            # No cost column to sit between -- attach trailing straight to the
+            # previous divider (lines│, or tokens│ with no lines) instead of
+            # growing a second, empty-celled one at `trailing_col`.
+            if include_lines:
+                line = f'{tokens_col}{vsep}{lines_col}{vsep_lines}{trailing}'
+                vsep_cols = (col1, col2)
+            else:
+                line = f'{tokens_col}{vsep}{trailing}'
+                vsep_cols = (col1,)
+        elif include_trailing:
             if include_lines:
                 line = f'{tokens_col}{vsep}{lines_col}{vsep_lines}{cost_col}{vsep_trailing}{trailing}'
                 vsep_cols = (col1, col2, trailing_col)

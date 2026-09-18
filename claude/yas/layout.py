@@ -927,6 +927,7 @@ def build_wide(
         view.cfg.justify,
         lines=(view.tool_counts.lines_read, view.tool_counts.lines_changed),
         show_icons=view.cfg.show_icons,
+        show_cost=view.cfg.show_cost,
     )
     # The tokens │ [lines │] cost │ [skills+plugins] row is fixed-content-width:
     # at the bottom of the wide band (box ~80-84) it cannot hold the tokens and
@@ -1501,22 +1502,30 @@ def build_wide(
                 tok_labels.append((_cache_lbl, _cache_anchor))
             if _out_i != -1:
                 tok_labels.append((f'output{_suf}', 3 + _out_i))
-            _has_lines_seg    = has_lines_seg
-            _has_trailing_seg = len(vsep_cols) > (1 + (1 if _has_lines_seg else 0))
-            # Centre `cost` within its cell instead of left-anchoring at the
-            # cell's start. The cell's left edge is the tokens│ (no lines
-            # segment) or lines│ (lines segment) vsep; its right edge is the
-            # cost│skills-plugins vsep when that trailing segment is present,
-            # else the cell runs unbounded to the row's own end (no right
-            # anchor to centre against, so left-anchor with a fixed offset).
-            _cost_left = vsep_cols[1] if _has_lines_seg else vsep_cols[0]
-            _cost_lbl  = f'cost{_suf}'
-            if _has_trailing_seg:
-                _cost_mid = (_cost_left + vsep_cols[-1]) // 2
-                tok_labels.append((_cost_lbl, max(_cost_left + 1, _cost_mid - len(_cost_lbl) // 2)))
-                tok_labels.append(('skills + plugins', vsep_cols[-1] + 2))
+            _has_lines_seg = has_lines_seg
+            if view.cfg.show_cost:
+                _has_trailing_seg = len(vsep_cols) > (1 + (1 if _has_lines_seg else 0))
+                # Centre `cost` within its cell instead of left-anchoring at the
+                # cell's start. The cell's left edge is the tokens│ (no lines
+                # segment) or lines│ (lines segment) vsep; its right edge is the
+                # cost│skills-plugins vsep when that trailing segment is present,
+                # else the cell runs unbounded to the row's own end (no right
+                # anchor to centre against, so left-anchor with a fixed offset).
+                _cost_left = vsep_cols[1] if _has_lines_seg else vsep_cols[0]
+                _cost_lbl  = f'cost{_suf}'
+                if _has_trailing_seg:
+                    _cost_mid = (_cost_left + vsep_cols[-1]) // 2
+                    tok_labels.append((_cost_lbl, max(_cost_left + 1, _cost_mid - len(_cost_lbl) // 2)))
+                    tok_labels.append(('skills + plugins', vsep_cols[-1] + 2))
+                else:
+                    tok_labels.append((_cost_lbl, _cost_left + 2))
             else:
-                tok_labels.append((_cost_lbl, _cost_left + 2))
+                # No cost column: the trailing divider (if present) attaches
+                # straight to lines│ (or tokens│ with no lines) instead of a
+                # cost│ boundary -- see `tokens_cost`'s show_cost=False shape.
+                _has_trailing_seg = len(vsep_cols) > (1 if _has_lines_seg else 0)
+                if _has_trailing_seg:
+                    tok_labels.append(('skills + plugins', vsep_cols[-1] + 2))
             # `lines read/changed` caption, centred between the first two vseps
             # — only present when that segment itself is. The cell here is
             # narrow enough that `_fit_label` (borders.py) almost always

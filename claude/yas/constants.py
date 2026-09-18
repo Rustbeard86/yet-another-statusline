@@ -125,6 +125,9 @@ DEFAULT_THEME        = 'claude-dark'
 DEFAULT_SHOW_DAY_STATS = True
 DEFAULT_SHOW_TOOL_USES = False
 DEFAULT_SHOW_TOKENS_OVER_TIME = False
+# Off by default: existing users shouldn't see a new cost column appear
+# unasked; opt in via yas.toml `[tokens] show_cost = true`.
+DEFAULT_SHOW_COST = False
 DEFAULT_JUSTIFY        = False
 DEFAULT_LABELS         = False
 # Context-state word (ported from Dumbometer, MIT). Opt-in: off by default so

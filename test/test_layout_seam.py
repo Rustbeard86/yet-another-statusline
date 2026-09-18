@@ -27,7 +27,7 @@ def _session() -> session_mod.SessionInfo:
 def _view(session=None) -> SessionView:
     if session is None:
         session = _session()
-    return SessionView(session, Config())
+    return SessionView(session, Config(show_cost=True))
 
 
 def _tick() -> TickRecord:
@@ -93,7 +93,7 @@ def test_tokens_row_is_single_content_line(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_tokens_row_session_only_single_line(monkeypatch: pytest.MonkeyPatch) -> None:
     _silence_dynamic(monkeypatch)
-    view = SessionView(_session(), Config(show_day_stats=False))
+    view = SessionView(_session(), Config(show_day_stats=False, show_cost=True))
     spec = layout.build_wide(view, _tick(), 160, _r)
     assert len(_tokens_row_indices(spec)) == 1
 
@@ -415,7 +415,7 @@ def test_sep_rate_elbow_still_present_when_seven_day_absent(monkeypatch: pytest.
     )
     sess = SessionInfo(**{**sess.__dict__, 'rate_limits': zero_limits})
 
-    view = SessionView(sess, Config())
+    view = SessionView(sess, Config(show_cost=True))
     spec = layout.build_wide(view, _tick(), 160, _r)
     lines = [strip_ansi(ln) for ln in layout.render_layout(spec, _r)]
 
@@ -618,7 +618,7 @@ def test_side_by_side_plan_column_capped_in_tree_mode(monkeypatch: pytest.Monkey
     _both_sections(monkeypatch, long_subject=True)
 
     width = 300
-    view  = SessionView(_session(), Config())
+    view  = SessionView(_session(), Config(show_cost=True))
     spec  = layout.build_wide(view, _tick(), width, _r)
 
     combined_idx = _divider_content_idx(spec)
@@ -639,7 +639,7 @@ def test_side_by_side_plan_column_sized_to_content_in_tree_mode(monkeypatch: pyt
     _both_sections(monkeypatch, long_subject=False)
 
     width = 300
-    view  = SessionView(_session(), Config())
+    view  = SessionView(_session(), Config(show_cost=True))
     spec  = layout.build_wide(view, _tick(), width, _r)
 
     combined_idx = _divider_content_idx(spec)
@@ -675,7 +675,7 @@ def test_side_by_side_plan_column_degrades_at_narrow_width(monkeypatch: pytest.M
     inner = width - 4
     assert inner * 45 // 100 < SUBAGENT_TREE_PLAN_WIDTH, 'precondition: 45% cap must undercut the fixed width here'
 
-    view = SessionView(_session(), Config())
+    view = SessionView(_session(), Config(show_cost=True))
     spec = layout.build_wide(view, _tick(), width, _r)
     combined_idx = _divider_content_idx(spec)
     assert combined_idx, 'expected side-by-side (still enough room at width 140)'
@@ -1228,7 +1228,7 @@ def test_tree_labels_loc_slash_stacks_over_data_slash(monkeypatch: pytest.Monkey
         classmethod(lambda cls, sid, pdir, now=None, **kwargs: subagents_mod.RunningSubagents(subagents=[sub])),
     )
 
-    view = SessionView(_session(), Config(labels=True))
+    view = SessionView(_session(), Config(labels=True, show_cost=True))
     view.__dict__['tool_counts'] = type(
         'FakeTC', (), {
             'counts': {}, 'per_agent': {'/fake/ui.jsonl': (381, 239)},
@@ -1259,7 +1259,7 @@ def test_tree_labels_name_shifted_right_of_desc_col_start(monkeypatch: pytest.Mo
         classmethod(lambda cls, sid, pdir, now=None, **kwargs: subagents_mod.RunningSubagents(subagents=[sub])),
     )
 
-    view = SessionView(_session(), Config(labels=True))
+    view = SessionView(_session(), Config(labels=True, show_cost=True))
     spec = layout.build_wide(view, _tick(), 200, _r)
 
     header_row = next(row for row in spec.rows if row.labels and any(lbl == 'name' for lbl, _ in row.labels))
@@ -1274,7 +1274,7 @@ def test_context_labels_survive_show_icons_false(monkeypatch: pytest.MonkeyPatch
     gone, so the anchor must fall back to the first token instead of
     silently dropping the whole label row."""
     _silence_dynamic(monkeypatch)
-    view = SessionView(_session(), Config(labels=True, show_icons=False))
+    view = SessionView(_session(), Config(labels=True, show_icons=False, show_cost=True))
     spec = layout.build_wide(view, _tick(), 200, _r)
 
     ctx_row = next(
@@ -1297,7 +1297,7 @@ def test_helper_row_show_icons_false_drops_5h7d_and_flame_when_gaps_widen(
     from helper import strip_ansi
 
     _silence_dynamic(monkeypatch)
-    view = SessionView(_session(), Config(show_icons=False))
+    view = SessionView(_session(), Config(show_icons=False, show_cost=True))
     for width in (140, 160, 180, 200, 220):
         spec = layout.build_wide(view, _tick(), width, _r)
         out  = layout.render_layout(spec, _r)
@@ -1316,7 +1316,7 @@ def test_path_row_show_icons_false_drops_folder_glyph(monkeypatch: pytest.Monkey
     from helper import strip_ansi
 
     _silence_dynamic(monkeypatch)
-    view = SessionView(_session(), Config(show_icons=False))
+    view = SessionView(_session(), Config(show_icons=False, show_cost=True))
     for width in (90, 120, 160, 200):
         specs = [
             ('build_medium', layout.build_medium(view, width, _r)),
@@ -1508,7 +1508,7 @@ def test_top_row_justify_padding_capped_at_wide_widths(monkeypatch: pytest.Monke
     session = _session()
 
     for width in (150, 200, 250, 300, 350):
-        view = SessionView(session, Config(justify=True))
+        view = SessionView(session, Config(justify=True, show_cost=True))
         spec = layout.build_wide(view, _tick(), width, _r)
         content_rows = [row for row in spec.rows if row.kind == 'content']
         plain = strip_ansi(content_rows[0].content)
@@ -1549,7 +1549,7 @@ def test_top_row_justify_never_overflows_the_box_with_short_model_form(
     )
 
     for width in range(78, 111):
-        view = SessionView(session, Config(justify=True))
+        view = SessionView(session, Config(justify=True, show_cost=True))
         spec = layout.build_wide(view, _tick(), width, _r)
         lines = layout.render_layout(spec, _r)
         for ln in lines:
@@ -1570,7 +1570,7 @@ def test_top_row_justify_matches_unjustified_when_slack_absorbed_by_cap(
     session = _session()
 
     for width in (150, 250, 350):
-        view = SessionView(session, Config(justify=True))
+        view = SessionView(session, Config(justify=True, show_cost=True))
         spec = layout.build_wide(view, _tick(), width, _r)
         lines = layout.render_layout(spec, _r)
         for ln in lines:

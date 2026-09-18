@@ -41,6 +41,10 @@
 # show_day_stats = true # bool; show today's cumulative token/cost totals alongside the
 #                       #   session's, as session/day pairs. NOTE: this display toggle
 #                       #   lives under [tokens], not [layout]. env: YAS_SHOW_DAY_STATS
+# show_cost = false     # bool; show the cost column ($sess / $day, or $sess alone with
+#                       #   show_day_stats=false) in the tokens row. Off by default so
+#                       #   existing users don't see a new cost figure appear unasked.
+#                       #   env: YAS_SHOW_COST
 #
 # Per-model soft_limit overrides. `match` is a case-insensitive plain substring
 # (no glob/regex) tested against the model id and display name. The LONGEST

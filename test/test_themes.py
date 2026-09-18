@@ -165,7 +165,7 @@ def frozen(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
 
 def _render(width: int, theme: Theme) -> str:
     session = session_mod.SessionInfo.from_dict(json.loads(SESSION.read_text()))
-    view    = SessionView(session, Config())
+    view    = SessionView(session, Config(show_cost=True))
     r       = renderer_mod.Renderer(bg_shift='warm', theme=theme)
     if width < NARROW_WIDTH:
         spec = layout.build_narrow(view, width, r)

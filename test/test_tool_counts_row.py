@@ -169,7 +169,7 @@ def test_row_absent_in_narrow_and_medium(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_row_directly_under_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
     """The tool row sits immediately after the tokens/cost content rows."""
     _silence_dynamic(monkeypatch)
-    view = _view(Config(show_tool_uses=True))
+    view = _view(Config(show_tool_uses=True, show_cost=True))
     view.__dict__['tool_counts'] = ToolCounts({'Zbash': (5, 2)})
     spec = layout.build_wide(view, _tick(), 160, _r)
     tok_idx = max(i for i, r in enumerate(spec.rows)

@@ -589,3 +589,68 @@ def test_tokens_cost_show_icons_true_leading_number_unchanged() -> None:
     on_default = _call(show_icons=True, sess_in=1)
     on_explicit = _call(show_icons=True, sess_in=1)
     assert on_default == on_explicit
+
+
+# show_cost (config-gated; default off) -- drops the cost column entirely,
+# not as a shed rung. Distinct from show_day_stats, which only changes the
+# cost column's *content* (session-only vs session/day).
+
+def test_tokens_cost_show_cost_false_drops_cost_text() -> None:
+    line = strip_ansi(_call(show_cost=False)[0][0])
+    assert '$' not in line
+
+
+def test_tokens_cost_show_cost_true_keeps_cost_text() -> None:
+    line = strip_ansi(_call(show_cost=True)[0][0])
+    assert '$0.01' in line and '$0.02' in line
+
+
+def test_tokens_cost_show_cost_false_drops_cost_icon() -> None:
+    lines, _cols, _mark, _min, _has_lines = _call(show_cost=False, show_icons=True)
+    assert ICON_COST not in lines[0]
+
+
+def test_tokens_cost_show_cost_false_narrower_min_width() -> None:
+    _lines_on,  _cols_on,  _m1, min_w_on,  _h1 = _call(show_cost=True)
+    _lines_off, _cols_off, _m2, min_w_off, _h2 = _call(show_cost=False)
+    # `min_width` is derived solely from the never-shed tokens column, which
+    # is unaffected by show_cost -- both forms share the same floor.
+    assert min_w_on == min_w_off
+
+
+def test_tokens_cost_show_cost_false_no_trailing_keeps_single_divider() -> None:
+    # No lines segment, and the (empty, blank-padded) trailing column is
+    # still included at this box width -- with cost dropped, trailing
+    # attaches straight to the tokens│ divider: one vsep, not two.
+    _lines, cols, _mark, _min, _has_lines = _call(show_cost=False)
+    assert cols == (cols[0],) and len(cols) == 1
+
+
+def test_tokens_cost_show_cost_false_trailing_attaches_to_tokens_divider() -> None:
+    # With trailing content present and cost hidden, trailing attaches
+    # directly to the tokens│ divider -- a single vsep, not two.
+    _lines, cols, _mark, _min, _has_lines = _call(show_cost=False, trailing_content='abc')
+    assert len(cols) == 1
+    line = strip_ansi(_lines[0])
+    assert 'abc' in line
+    assert '$' not in line
+
+
+def test_tokens_cost_show_cost_false_with_lines_segment_two_dividers() -> None:
+    _lines, cols, _mark, _min, has_lines = _call(
+        show_cost=False, trailing_content='abc',
+        lines=(10, 5), box_width=200,
+    )
+    assert has_lines is True
+    assert len(cols) == 2
+    line = strip_ansi(_lines[0])
+    assert '$' not in line
+    assert 'abc' in line
+
+
+def test_tokens_cost_show_cost_default_is_true() -> None:
+    """Renderer.tokens_cost's own default stays permissive (True); the
+    config-level default (Config.show_cost, off) is what actually hides the
+    column for callers that go through Config -- see layout.py's call site."""
+    line = strip_ansi(_call()[0][0])
+    assert '$' in line

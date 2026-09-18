@@ -37,7 +37,7 @@ def _tick() -> TickRecord:
 
 
 def _render(labels: bool, now: float | None = None) -> list[str]:
-    view = SessionView(_session(), Config(labels=labels), now)
+    view = SessionView(_session(), Config(labels=labels, show_cost=True), now)
     spec = layout.build_wide(view, _tick(), 160, _r)
     return layout.render_layout(spec, _r)
 
@@ -93,7 +93,7 @@ def test_off_rowspec_labels_empty():
 # --- Value-aligned labels (measured anchors over the rendered value) ----------
 
 def _render_dict(d: dict, labels: bool = True, width: int = 200) -> list[str]:
-    view = SessionView(session_mod.SessionInfo.from_dict(d), Config(labels=labels))
+    view = SessionView(session_mod.SessionInfo.from_dict(d), Config(labels=labels, show_cost=True))
     spec = layout.build_wide(view, _tick(), width, _r)
     return layout.render_layout(spec, _r)
 
@@ -130,7 +130,7 @@ def _cache_view(width_cfg: Config | None = None) -> SessionView:
     """Example session with a live cache countdown, so the top row grows its
     trailing cache cell."""
     view = SessionView(session_mod.SessionInfo.from_dict(_full_limits_dict()),
-                       width_cfg or Config(labels=True))
+                       width_cfg or Config(labels=True, show_cost=True))
     view.__dict__['cache_countdown'] = (2988.0, 40)   # -49:48, 40% elapsed
     return view
 
@@ -142,7 +142,7 @@ def test_cache_cell_pads_five_columns_and_anchors_its_label(width, justify):
     # plus CACHE_LEAD) right of its `│` (regression: justification split the
     # extra around the value, so the pad drifted with terminal width), and the
     # `cache` caption anchors to that same column.
-    view  = _cache_view(Config(labels=True, justify=justify))
+    view  = _cache_view(Config(labels=True, justify=justify, show_cost=True))
     spec  = layout.build_wide(view, _tick(), width, _r)
     lines = [strip_ansi(ln) for ln in layout.render_layout(spec, _r)]
     top, row1 = lines[0], lines[1]
@@ -205,7 +205,7 @@ def _short_labels_view(with_trailing: bool = False) -> SessionView:
     # day-stats off keeps the labels short enough to centre without contending
     # with the neighbouring token labels.
     view = SessionView(session_mod.SessionInfo.from_dict(_full_limits_dict()),
-                       Config(labels=True, show_day_stats=False))
+                       Config(labels=True, show_day_stats=False, show_cost=True))
     if with_trailing:
         # Inject a skill to populate the tokens/cost row's trailing
         # "skills + plugins" segment with content -- the segment (and its
@@ -251,7 +251,7 @@ def test_lines_and_cost_labels_present_with_icons_off():
     # the elbow between the loc and cost cells (dropped as well) whenever the
     # lines segment was actually present. Both labels must still render.
     view = SessionView(session_mod.SessionInfo.from_dict(_full_limits_dict()),
-                       Config(labels=True, show_day_stats=False, show_icons=False))
+                       Config(labels=True, show_day_stats=False, show_icons=False, show_cost=True))
     sep, _cont = _tok_sep_and_content(_render_view(view))
     assert superscript('loc r/w') in sep or superscript('loc read/write') in sep
     assert superscript('cost') in sep
@@ -305,7 +305,7 @@ def test_changes_label_full_and_right_aligned():
 # --- clear-label omission and section captions --------------------------------
 
 def _view(d: dict, labels: bool = True) -> SessionView:
-    return SessionView(session_mod.SessionInfo.from_dict(d), Config(labels=labels))
+    return SessionView(session_mod.SessionInfo.from_dict(d), Config(labels=labels, show_cost=True))
 
 
 def _render_view(view: SessionView, width: int = 200) -> list[str]:

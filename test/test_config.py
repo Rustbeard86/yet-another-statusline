@@ -65,6 +65,7 @@ def test_default_when_nothing_set(tmp_path: Path) -> None:
     assert cfg.single_width is False
     assert cfg.show_icons is True
     assert cfg.show_day_stats is True
+    assert cfg.show_cost is False
     assert cfg.show_render_time is False
     assert cfg.show_tool_uses is False
     assert cfg.show_tokens_over_time is False
@@ -294,6 +295,44 @@ def test_env_show_tool_uses_overrides_toml_false(tmp_path: Path) -> None:
     (tmp_path / 'yas.toml').write_text('[layout]\nshow_tool_uses = false\n')
     cfg = config.Config.load(env={'YAS_SHOW_TOOL_USES': '1'}, config_dir=tmp_path)
     assert cfg.show_tool_uses is True
+
+
+# show_cost (cost column in the tokens row; off by default so existing users
+# don't see a new figure appear unasked)
+
+@requires_tomllib
+def test_toml_show_cost_true(tmp_path: Path) -> None:
+    (tmp_path / 'yas.toml').write_text('[tokens]\nshow_cost = true\n')
+    cfg = config.Config.load(env={}, config_dir=tmp_path)
+    assert cfg.show_cost is True
+    assert 'show_cost' not in cfg.errors
+
+
+@requires_tomllib
+def test_toml_show_cost_must_be_real_bool(tmp_path: Path) -> None:
+    (tmp_path / 'yas.toml').write_text('[tokens]\nshow_cost = "yes"\n')
+    cfg = config.Config.load(env={}, config_dir=tmp_path)
+    assert cfg.show_cost is False  # rejected to default
+    assert 'show_cost' in cfg.errors
+
+
+def test_env_show_cost_falsy_values(tmp_path: Path) -> None:
+    for val in ('0', 'false', 'FALSE'):
+        cfg = config.Config.load(env={'YAS_SHOW_COST': val}, config_dir=tmp_path)
+        assert cfg.show_cost is False, f'expected False for YAS_SHOW_COST={val!r}'
+
+
+def test_env_show_cost_truthy_values(tmp_path: Path) -> None:
+    for val in ('1', 'true', 'TRUE'):
+        cfg = config.Config.load(env={'YAS_SHOW_COST': val}, config_dir=tmp_path)
+        assert cfg.show_cost is True, f'expected True for YAS_SHOW_COST={val!r}'
+
+
+@requires_tomllib
+def test_env_show_cost_overrides_toml_false(tmp_path: Path) -> None:
+    (tmp_path / 'yas.toml').write_text('[tokens]\nshow_cost = false\n')
+    cfg = config.Config.load(env={'YAS_SHOW_COST': '1'}, config_dir=tmp_path)
+    assert cfg.show_cost is True
 
 
 # transcript_cache (persists per-transcript parse results; default true)

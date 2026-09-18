@@ -38,6 +38,7 @@ from yas.constants import (
     DEFAULT_SOFT_LIMIT,
     DEFAULT_TOKEN_WINDOW,
     DEFAULT_THEME,
+    DEFAULT_SHOW_COST,
     DEFAULT_SHOW_DAY_STATS,
     DEFAULT_SHOW_TOOL_USES,
     DEFAULT_SHOW_TOKENS_OVER_TIME,
@@ -471,7 +472,7 @@ class Config:
     __slots__ = (
         'max_width', 'full_width', 'justify', 'labels', 'soft_limit',
         'token_window', 'theme', 'bg_shift', 'glyph_mode', 'single_width',
-        'show_day_stats', 'context_state', 'context_labels', 'context_thresholds',
+        'show_day_stats', 'show_cost', 'context_state', 'context_labels', 'context_thresholds',
         'show_render_time', 'show_tool_uses', 'show_tokens_over_time', 'soft_limit_models',
         'openspec_scan_depth', 'show_icons', 'transcript_cache', 'rate_limit_rules',
         'rate_limit_weights', 'errors', 'debug_lines',
@@ -488,6 +489,7 @@ class Config:
     glyph_mode:         str
     single_width:       bool
     show_day_stats:     bool
+    show_cost:          bool
     context_state:      bool
     context_labels:     tuple[str, ...]
     context_thresholds: tuple[int, ...]
@@ -516,6 +518,7 @@ class Config:
         glyph_mode:         str = 'nerdfont',
         single_width:       bool = False,
         show_day_stats:     bool = DEFAULT_SHOW_DAY_STATS,
+        show_cost:          bool = DEFAULT_SHOW_COST,
         context_state:      bool = DEFAULT_CONTEXT_STATE,
         context_labels:     tuple[str, ...] = DEFAULT_CONTEXT_LABELS,
         context_thresholds: tuple[int, ...] = DEFAULT_CONTEXT_THRESHOLDS,
@@ -543,6 +546,7 @@ class Config:
         s(self, 'glyph_mode', glyph_mode)
         s(self, 'single_width', single_width)
         s(self, 'show_day_stats', show_day_stats)
+        s(self, 'show_cost', show_cost)
         s(self, 'context_state', context_state)
         s(self, 'context_labels', context_labels)
         s(self, 'context_thresholds', context_thresholds)
@@ -569,7 +573,8 @@ class Config:
                 f'justify={self.justify}, labels={self.labels}, soft_limit={self.soft_limit}, '
                 f'token_window={self.token_window}, theme={self.theme!r}, bg_shift={self.bg_shift!r}, '
                 f'glyph_mode={self.glyph_mode!r}, single_width={self.single_width}, '
-                f'show_day_stats={self.show_day_stats}, context_state={self.context_state}, '
+                f'show_day_stats={self.show_day_stats}, show_cost={self.show_cost}, '
+                f'context_state={self.context_state}, '
                 f'context_labels={self.context_labels!r}, context_thresholds={self.context_thresholds!r}, '
                 f'show_render_time={self.show_render_time}, show_tool_uses={self.show_tool_uses}, '
                 f'show_tokens_over_time={self.show_tokens_over_time}, '
@@ -668,6 +673,10 @@ class Config:
             'show_day_stats',
             _env_sources(env, 'YAS_SHOW_DAY_STATS') + toml_src(tokens, 'show_day_stats'),
             _parse_show_day_stats, DEFAULT_SHOW_DAY_STATS, errors, debug)
+        show_cost = _resolve(
+            'show_cost',
+            _env_sources(env, 'YAS_SHOW_COST') + toml_src(tokens, 'show_cost'),
+            _parse_bool, DEFAULT_SHOW_COST, errors, debug)
         show_render_time = _resolve(
             'show_render_time',
             _env_sources(env, 'YAS_SHOW_RENDER_TIME') + toml_src(layout, 'show_render_time'),
@@ -730,6 +739,7 @@ class Config:
             glyph_mode=glyph_mode,
             single_width=single_width,
             show_day_stats=show_day_stats,
+            show_cost=show_cost,
             context_state=context_state,
             context_labels=context_labels,
             context_thresholds=context_thresholds,

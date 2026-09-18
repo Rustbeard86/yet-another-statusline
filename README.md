@@ -110,6 +110,7 @@ aliases when both are set — the aliases keep working but are deprecated.
 | `labels` | `YAS_LABELS` | — | `[layout].labels` | `false` |
 | `justify` | `YAS_JUSTIFY` | — | `[layout].justify` | `false` |
 | `show_day_stats` | `YAS_SHOW_DAY_STATS` | — | `[tokens].show_day_stats` | `true` |
+| `show_cost` | `YAS_SHOW_COST` | — | `[tokens].show_cost` | `false` |
 | `openspec_scan_depth` | `YAS_OPENSPEC_SCAN_DEPTH` | — | `[openspec].scan_depth` | `1` |
 
 #### Valid values
@@ -135,6 +136,7 @@ aliases when both are set — the aliases keep working but are deprecated.
 - **`labels`** — when `true`, paints small superscript field captions into the border/separator rows (wide layout only). **Note:** this is a different knob from `[context].labels`, which is the five-word state list — see [Context state word](#context-state-word). The two share a key name but live in different sections and take different types.
 - **`justify`** — when `true`, aligns fields into columns instead of packing them left (wide layout only).
 - **`show_day_stats`** — when `true` (the default), shows today's cumulative token and cost totals alongside the session's, as `session/day` pairs. **Note:** this key lives under **`[tokens]`**, not `[layout]`, unlike the other display toggles.
+- **`show_cost`** — when `true`, adds the cost column (`$<sess> / $<day>` or `$<sess>` with `show_day_stats=false`) to the tokens row. `false` by default, so existing users don't see a new cost figure appear unasked; opt in explicitly. **Note:** this key also lives under **`[tokens]`**.
 - **`openspec_scan_depth`** — how many repo-levels below `cwd` the OpenSpec downward scan descends looking for nested `openspec/` roots (monorepo-of-repos layout). `1` (the default) finds a repo directly below `cwd`; `2` also finds one nested a level deeper; `0` disables the downward scan entirely (only an `openspec/` found by walking *upward* from `cwd` is used). Unlike the other numeric knobs, `0` is a legal value here.
 - **CLI flags** — `--theme NAME` / `--bg-shift DIR` also accept the `--theme=NAME` / `--bg-shift=DIR` form. Pass them in the `statusLine.command` of your `~/.claude/settings.json`.
 - **Legacy theme file** — `~/.claude/statusline-theme` is **no longer read**. If you re-run the installer while the file is non-empty and `yas.toml` does not already set a theme, the installer folds its value into `yas.toml` once, and the migration then deletes the file. Otherwise set the theme by hand:
