@@ -17,11 +17,25 @@ the sibling parsers — first-wins would undercount.
 
 ## In-scope tools
 
-Four tools contribute to line counts: ``Read``, ``Write``, ``Edit``, and the MCP
-``DesignSync`` tool's ``get_file`` method (all other ``DesignSync`` methods,
-e.g. ``list_files``, are not reads). Others (``Bash``, ``NotebookEdit``, etc.)
-are excluded. ``NotebookEdit`` is excluded because its cell model does not map
-cleanly to line counts.
+Line counts come from ``Read``, ``Write``, ``Edit``, ``MultiEdit``, ``Bash``
+(read commands and heredoc file writes, see below), and the MCP ``DesignSync``
+tool's ``get_file`` method (all other ``DesignSync`` methods, e.g.
+``list_files``, are not reads). Others (``NotebookEdit``, etc.) are excluded.
+``NotebookEdit`` is excluded because its cell model does not map cleanly to
+line counts.
+
+## Bash
+
+Reads: split the command on ``&&``, ``||`` and ``;`` and take the last segment.
+Its first pipeline command, ignoring leading ``VAR=x`` assignments and
+``sudo``, is a read if its first word is ``cat``, ``head``, ``tail``, ``grep``,
+``rg``, ``awk`` or ``nl``, or is ``sed`` with ``-n`` and without ``-i``. A
+segment with an output redirect (``>``/``>>``) or ``tee`` is a write, not a
+read. The newline count of the paired ``tool_result`` goes to ``lines_read``.
+
+Writes: the body line count of each heredoc goes to ``lines_changed``, only
+when the command redirects to a file (``>``, ``>>``, ``tee``). ``sed -i`` is
+not counted. Unparseable commands (``shlex`` errors) count as nothing.
 
 ## Lines read measurement
 
@@ -46,6 +60,7 @@ raised.
 
 - ``Edit``: counted as ``max(newlines(old_string), newlines(new_string))``, the
   size of the touched hunk.
+- ``MultiEdit``: the Edit rule applied to each entry of ``input.edits`` and summed.
 - ``Write``: counted as ``newlines(content)``, the whole file written.
 
 ``replace_all: true`` is counted **once regardless of the number of replacements**,
@@ -68,6 +83,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 from dataclasses import dataclass
 
 from yas.constants import META_EXCLUDE_TOOLS
@@ -82,6 +98,108 @@ _CAT_N_PREFIX_RE = re.compile(r'^\d+\t')
 # raw JSON-encoded line, where a tab is escaped as the two-byte sequence
 # b'\t' (backslash, t), not a literal tab byte.
 _CAT_N_PREFIX_BYTES_RE = re.compile(rb'\d\\t')
+
+# Bash classification. First words that read a file/stream to stdout.
+_BASH_READ_WORDS = frozenset(('cat', 'head', 'tail', 'grep', 'rg', 'awk', 'nl'))
+_BASH_SEPARATORS = frozenset(('&&', '||', ';'))
+_BASH_REDIRECTS  = frozenset(('>', '>>', '&>', '&>>', '>|'))
+_HEREDOC_RE      = re.compile(r'(?<!<)<<(?!<)-?\s*([\'"]?)([^\s\'"<>|&;()]+)\1')
+_ASSIGNMENT_RE   = re.compile(r'^\w+=')
+
+
+def _split_heredocs(cmd: str) -> tuple[str, int]:
+    """Return ``(cmd without heredoc bodies, total heredoc body line count)``."""
+    kept: list[str] = []
+    delims: list[str] = []
+    body_lines = 0
+    for line in cmd.split('\n'):
+        if delims:
+            if line.strip() == delims[0]:
+                delims.pop(0)
+            else:
+                body_lines += 1
+            continue
+        kept.append(line)
+        delims = [m.group(2) for m in _HEREDOC_RE.finditer(line)]
+    return '\n'.join(kept), body_lines
+
+
+def _bash_segments(cmd: str) -> list[list[str]] | None:
+    """Tokenize ``cmd`` and split on ``&&``/``||``/``;``; None on a parse error."""
+    lexer = shlex.shlex(cmd.replace('\n', ' ; '), posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        return None
+    segments: list[list[str]] = [[]]
+    for tok in tokens:
+        if tok in _BASH_SEPARATORS:
+            segments.append([])
+        else:
+            segments[-1].append(tok)
+    return [seg for seg in segments if seg]
+
+
+def _writes_to_file(tokens: list[str]) -> bool:
+    """True if ``tokens`` contain ``tee`` or a stdout redirect to a real file."""
+    for i, tok in enumerate(tokens):
+        if tok == 'tee':
+            return True
+        if tok not in _BASH_REDIRECTS:
+            continue
+        if i and tokens[i - 1] == '2':
+            continue
+        if i + 1 < len(tokens) and tokens[i + 1] == '/dev/null':
+            continue
+        return True
+    return False
+
+
+def _is_sed_read(args: list[str]) -> bool:
+    """``sed`` with -n and without -i/--in-place."""
+    has_n = False
+    for arg in args:
+        if arg == '--in-place' or arg.startswith('-i'):
+            return False
+        if re.fullmatch(r'-[A-Za-z]+', arg):
+            if 'i' in arg:
+                return False
+            has_n = has_n or 'n' in arg
+    return has_n
+
+
+def _bash_is_read(segments: list[list[str]]) -> bool:
+    """Classify the last segment's first pipeline command as a read."""
+    if not segments:
+        return False
+    last = segments[-1]
+    if _writes_to_file(last):
+        return False
+    pipeline = last[:last.index('|')] if '|' in last else last
+    words = [t for t in pipeline if not _ASSIGNMENT_RE.match(t) and t != 'sudo']
+    # Assignments/sudo only count as a prefix, but dropping them anywhere in
+    # the first pipeline command is close enough for a line-count estimate.
+    if not words:
+        return False
+    word = os.path.basename(words[0])
+    if word == 'sed':
+        return _is_sed_read(words[1:])
+    return word in _BASH_READ_WORDS
+
+
+def _classify_bash(cmd: object) -> tuple[bool, int]:
+    """Return ``(is_read, heredoc_lines_written)`` for a Bash command string."""
+    if not isinstance(cmd, str) or not cmd:
+        return False, 0
+    text, body_lines = _split_heredocs(cmd)
+    segments = _bash_segments(text)
+    if segments is None:
+        return False, 0
+    written = 0
+    if body_lines and _writes_to_file([t for seg in segments for t in seg]):
+        written = body_lines
+    return _bash_is_read(segments), written
 
 
 @dataclass(slots=True)
@@ -157,6 +275,10 @@ def count_transcript(
     # tool_use_id -> True once its tool_result has contributed to lines_read,
     # so a retransmitted/duplicate tool_result can't double-count.
     counted_read_ids: set[str] = set()
+    # Bash read tool_use ids, and the pending subset as bytes so the byte
+    # pre-filter can let their (cat -n-less) tool_result lines through.
+    bash_read_ids: set[str] = set()
+    bash_pending: set[bytes] = set()
     lines_read = 0
     lines_changed = 0
 
@@ -173,11 +295,12 @@ def count_transcript(
                 #     a cat -n style digit-tab marker (JSON-escaped as e.g.
                 #     '500\t', native Read — numbering may start at any
                 #     offset, not just line 1) or the DesignSync get_file
-                #     marker before decoding.
+                #     marker, or a pending Bash read id, before decoding.
                 if b'"tool_result"' in raw and b'"tool_use"' not in raw:
                     if (
                         not _CAT_N_PREFIX_BYTES_RE.search(raw)
                         and b'get_file' not in raw
+                        and not any(b in raw for b in bash_pending)
                     ):
                         continue
 
@@ -247,6 +370,11 @@ def count_transcript(
                                             else 0
                                         )
                             counted_read_ids.add(tool_use_id)
+                        elif tool_use_id in bash_read_ids:
+                            if isinstance(content, str):
+                                lines_read += content.count('\n')
+                            counted_read_ids.add(tool_use_id)
+                            bash_pending.discard(tool_use_id.encode())
 
                     # The mid guard below only protects the tool_use-side
                     # accounting (`counts`, `lines_changed` via per_id /
@@ -294,6 +422,24 @@ def count_transcript(
                                 old = inp.get('old_string')
                                 new = inp.get('new_string')
                                 id_changed += max(_nl(old), _nl(new))
+                            elif name == 'MultiEdit':
+                                inp = block.get('input') or {}
+                                for edit in inp.get('edits') or []:
+                                    if not isinstance(edit, dict):
+                                        continue
+                                    id_changed += max(
+                                        _nl(edit.get('old_string')),
+                                        _nl(edit.get('new_string')),
+                                    )
+                            elif name == 'Bash':
+                                inp = block.get('input') or {}
+                                is_read, written = _classify_bash(inp.get('command'))
+                                id_changed += written
+                                block_id = block.get('id')
+                                if is_read and block_id:
+                                    bash_read_ids.add(block_id)
+                                    if block_id not in counted_read_ids:
+                                        bash_pending.add(block_id.encode())
                             elif name == 'Write':
                                 # lines_changed += content
                                 inp = block.get('input') or {}

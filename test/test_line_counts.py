@@ -13,7 +13,7 @@ from pathlib import Path
 
 from yas.constants import META_EXCLUDE_TOOLS
 from yas.info.subagents import RunningSubagent, _parse_iso_to_epoch
-from yas.info.toolcounts import ToolCounts, count_transcript
+from yas.info.toolcounts import ToolCounts, _classify_bash, count_transcript
 
 TS_EARLY = '2026-01-01T00:00:00Z'
 TS_LATE  = '2026-01-01T12:00:00Z'
@@ -74,6 +74,19 @@ def _edit_use(block_id: str, old: str, new: str, replace_all: bool = False) -> d
 
 def _write_use(block_id: str, content: str) -> dict:
     return {'type': 'tool_use', 'id': block_id, 'name': 'Write', 'input': {'content': content}}
+
+
+def _multi_edit_use(block_id: str, edits: list[tuple[str, str]]) -> dict:
+    return {
+        'type':  'tool_use',
+        'id':    block_id,
+        'name':  'MultiEdit',
+        'input': {'edits': [{'old_string': o, 'new_string': n} for o, n in edits]},
+    }
+
+
+def _bash_use(block_id: str, command: str) -> dict:
+    return {'type': 'tool_use', 'id': block_id, 'name': 'Bash', 'input': {'command': command}}
 
 
 def _designsync_use(block_id: str, method: str, path: str = '_ds/x/tokens/base.css') -> dict:
@@ -355,6 +368,7 @@ def _naive_count_transcript(path: str, clear_epoch: float | None, *, skip_sidech
     per_id: dict[str, list[str]] = {}
     per_id_changed: dict[str, int] = {}
     read_ids: set[str] = set()
+    bash_read_ids: set[str] = set()
     lines_read = 0
 
     with open(path, encoding='utf-8') as fh:
@@ -394,6 +408,14 @@ def _naive_count_transcript(path: str, clear_epoch: float | None, *, skip_sidech
                     elif name == 'Edit':
                         inp = block.get('input') or {}
                         id_changed += max(_nl(inp.get('old_string')), _nl(inp.get('new_string')))
+                    elif name == 'MultiEdit':
+                        for edit in (block.get('input') or {}).get('edits') or []:
+                            id_changed += max(_nl(edit.get('old_string')), _nl(edit.get('new_string')))
+                    elif name == 'Bash':
+                        is_read, written = _classify_bash((block.get('input') or {}).get('command'))
+                        id_changed += written
+                        if is_read:
+                            bash_read_ids.add(block['id'])
                     elif name == 'Write':
                         inp = block.get('input') or {}
                         id_changed += _nl(inp.get('content'))
@@ -402,9 +424,13 @@ def _naive_count_transcript(path: str, clear_epoch: float | None, *, skip_sidech
                 if not isinstance(block, dict) or block.get('type') != 'tool_result':
                     continue
                 tool_use_id = block.get('tool_use_id')
+                content = block.get('content')
+                if tool_use_id in bash_read_ids:
+                    if isinstance(content, str):
+                        lines_read += content.count('\n')
+                    continue
                 if tool_use_id not in read_ids:
                     continue
-                content = block.get('content')
                 if isinstance(content, str) and content.startswith('1\t'):
                     lines_read += content.count('\n')
 
@@ -431,6 +457,9 @@ def test_prefiltered_walk_matches_naive_full_decode_reference(tmp_path: Path) ->
         _user_line('u2', 'r2', [{'type': 'image', 'source': {}}]),
         _assistant_line('m6', [_read_use('r3')]),
         _user_line('u3', 'r3', 'not cat -n shaped\n'),
+        _assistant_line('m7', [_bash_use('b1', 'cd x && cat f'), _bash_use('b2', 'cat > f <<EOF\na\nb\nEOF')]),
+        _user_line('u4', 'b1', 'one\ntwo\n'),
+        _assistant_line('m8', [_multi_edit_use('me1', [('a\nb\n', 'c\n'), ('x\n', 'y\nz\nw\n')])]),
     ])
 
     for skip in (True, False):
@@ -441,3 +470,154 @@ def test_prefiltered_walk_matches_naive_full_decode_reference(tmp_path: Path) ->
         assert real.counts == naive_counts
         assert real.lines_read == naive_lines_read
         assert real.lines_changed == naive_lines_changed
+
+
+class TestBashReads:
+    def _read_lines(self, tmp_path: Path, command: str, result: str = 'a\nb\nc\n') -> int:
+        path = _write_file(tmp_path, 'main.jsonl', [
+            _assistant_line('m1', [_bash_use('b1', command)]),
+            _user_line('u1', 'b1', result),
+        ])
+        return count_transcript(path, None, skip_sidechain=False).lines_read
+
+    def test_each_read_command_counts_result_newlines(self, tmp_path: Path) -> None:
+        commands = ['cat f', 'head -5 f', 'tail f', 'grep x f', 'rg x', 'awk 1 f', 'nl f', 'sed -n 1,3p f']
+
+        result = [self._read_lines(tmp_path, c) for c in commands]
+
+        expected = [3] * len(commands)
+        assert result == expected
+
+    def test_last_segment_after_and_decides(self, tmp_path: Path) -> None:
+        result = self._read_lines(tmp_path, 'cd x && cat f')
+
+        expected = 3
+        assert result == expected
+
+    def test_non_read_last_segment_is_not_counted(self, tmp_path: Path) -> None:
+        result = self._read_lines(tmp_path, 'cat f; ls')
+
+        expected = 0
+        assert result == expected
+
+    def test_pipeline_uses_first_command(self, tmp_path: Path) -> None:
+        result = self._read_lines(tmp_path, 'grep x f | head')
+
+        expected = 3
+        assert result == expected
+
+    def test_assignment_and_sudo_prefix_are_ignored(self, tmp_path: Path) -> None:
+        result = self._read_lines(tmp_path, 'LC_ALL=C sudo cat f')
+
+        expected = 3
+        assert result == expected
+
+    def test_sed_n_counts_but_sed_in_place_does_not(self, tmp_path: Path) -> None:
+        result = (
+            self._read_lines(tmp_path, "sed -n '1,3p' f"),
+            self._read_lines(tmp_path, "sed -i 's/a/b/' f"),
+            self._read_lines(tmp_path, "sed -n -i 's/a/b/p' f"),
+        )
+
+        expected = (3, 0, 0)
+        assert result == expected
+
+    def test_redirect_and_tee_are_not_reads(self, tmp_path: Path) -> None:
+        result = (
+            self._read_lines(tmp_path, 'cat f > g'),
+            self._read_lines(tmp_path, 'cat f | tee g'),
+            self._read_lines(tmp_path, 'cat f 2>/dev/null'),
+        )
+
+        expected = (0, 0, 3)
+        assert result == expected
+
+    def test_unparseable_command_is_not_a_read(self, tmp_path: Path) -> None:
+        result = self._read_lines(tmp_path, 'cat "unterminated')
+
+        expected = 0
+        assert result == expected
+
+    def test_duplicate_tool_result_counts_once(self, tmp_path: Path) -> None:
+        path = _write_file(tmp_path, 'main.jsonl', [
+            _assistant_line('m1', [_bash_use('b1', 'cat f')]),
+            _user_line('u1', 'b1', 'a\nb\n'),
+            _user_line('u2', 'b1', 'a\nb\n'),
+        ])
+
+        result = count_transcript(path, None, skip_sidechain=False).lines_read
+
+        expected = 2
+        assert result == expected
+
+
+class TestBashWrites:
+    def _changed(self, tmp_path: Path, command: str) -> tuple[int, int]:
+        path = _write_file(tmp_path, 'main.jsonl', [
+            _assistant_line('m1', [_bash_use('b1', command)]),
+            _user_line('u1', 'b1', 'x\ny\n'),
+        ])
+        stats = count_transcript(path, None, skip_sidechain=False)
+        return stats.lines_read, stats.lines_changed
+
+    def test_cat_heredoc_is_write_not_read(self, tmp_path: Path) -> None:
+        result = self._changed(tmp_path, 'cat > f <<EOF\na\nb\nc\nEOF')
+
+        expected = (0, 3)
+        assert result == expected
+
+    def test_all_heredoc_delimiter_forms_count(self, tmp_path: Path) -> None:
+        forms = ["<<EOF", "<<'EOF'", "<<-EOF", '<<"EOF"']
+
+        result = [self._changed(tmp_path, f'cat >> f {f}\na\nb\nEOF') for f in forms]
+
+        expected = [(0, 2)] * len(forms)
+        assert result == expected
+
+    def test_tee_heredoc_is_write(self, tmp_path: Path) -> None:
+        result = self._changed(tmp_path, 'tee f <<EOF\na\nb\nEOF')
+
+        expected = (0, 2)
+        assert result == expected
+
+    def test_heredoc_piped_to_python_is_not_write(self, tmp_path: Path) -> None:
+        result = self._changed(tmp_path, 'python3 - <<EOF\nprint(1)\nprint(2)\nEOF')
+
+        expected = (0, 0)
+        assert result == expected
+
+    def test_sed_in_place_is_not_counted(self, tmp_path: Path) -> None:
+        result = self._changed(tmp_path, "sed -i 's/a/b/' f")
+
+        expected = (0, 0)
+        assert result == expected
+
+    def test_heredoc_body_with_separators_does_not_affect_classification(self, tmp_path: Path) -> None:
+        result = self._changed(tmp_path, 'cat > f <<EOF\na && b; c\nEOF')
+
+        expected = (0, 1)
+        assert result == expected
+
+
+class TestMultiEdit:
+    def test_sums_max_of_old_and_new_per_edit(self, tmp_path: Path) -> None:
+        path = _write_file(tmp_path, 'main.jsonl', [
+            _assistant_line('m1', [_multi_edit_use('e1', [('a\nb\n', 'c\n'), ('x\n', 'y\nz\nw\n')])]),
+        ])
+
+        result = count_transcript(path, None, skip_sidechain=False).lines_changed
+
+        expected = 2 + 3
+        assert result == expected
+
+    def test_streamed_message_id_is_deduplicated(self, tmp_path: Path) -> None:
+        block = _multi_edit_use('e1', [('a\n', 'b\n')])
+        path = _write_file(tmp_path, 'main.jsonl', [
+            _assistant_line('m1', [block]),
+            _assistant_line('m1', [block]),
+        ])
+
+        result = count_transcript(path, None, skip_sidechain=False).lines_changed
+
+        expected = 1
+        assert result == expected
