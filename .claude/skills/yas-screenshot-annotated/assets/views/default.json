@@ -1,0 +1,25 @@
+{
+  "scenario": "sonnet-thinking",
+  "frame": "default view",
+  "labels": [
+    {"text": "repo dir/git info", "side": "above", "anchor": {"regex": "~/\\S+ ∈ \\S+", "offset": [-10, 0]}},
+    {"text": "session ID", "side": "above", "anchor": {"regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "offset": [10, 0]}},
+    {"text": "session\nelapsed time", "side": "above", "anchor": {"regex": "\\+\\d+:\\d\\d", "row": 1}},
+    {"text": "time until\n5h reset", "side": "above", "anchor": {"regex": "\\(-\\d+:\\d\\d\\)", "row": 1}},
+    {"text": "5h limit\nused", "side": "above", "anchor": {"regex": "(?<![-+\\d])\\d+\\.\\d%", "row": 1, "occurrence": 1}},
+    {"text": "5 hour\nburn rate", "side": "above", "anchor": {"regex": "[-+]\\d+\\.\\d%", "row": 1, "occurrence": 1}},
+    {"text": "7d limit\nused", "side": "above", "anchor": {"regex": "(?<![-+\\d])\\d+\\.\\d%", "row": 1, "occurrence": 2}},
+    {"text": "7 day\nburn rate", "side": "above", "anchor": {"regex": "[-+]\\d+\\.\\d%", "row": 1, "occurrence": 2}},
+    {"text": "cache\ncountdown", "side": "above", "anchor": {"regex": "-\\d{2}:\\d{2}"}},
+    {"text": "model / thinking\n(changes colour)", "side": "above", "anchor": {"regex": "[A-Z][a-z]+ \\d+\\.\\d+ \\(\\w+\\)"}},
+    {"text": "context\nwindow", "side": "left", "anchor": {"regex": "\\d+\\.\\dK \\(\\d+%\\)", "row": 3}},
+    {"text": "input tokens\n(incl. cache writes)\nsession / today", "side": "below", "anchor": {"regex": "[\\d.]+[KM]/[\\d.]+[KM]", "row": 5, "occurrence": 1}},
+    {"text": "cache read tokens\nsession / today", "side": "below", "anchor": {"regex": "[\\d.]+[KM]/[\\d.]+[KM]", "row": 5, "occurrence": 2}},
+    {"text": "output tokens\nsession / today", "side": "below", "anchor": {"regex": "[\\d.]+[KM]/[\\d.]+[KM]", "row": 5, "occurrence": 3}},
+    {"text": "token limit", "side": "right", "anchor": {"regex": "░(?= │$)"}},
+    {"text": "border shows\ncolour gradient\nas context fills", "side": "right", "anchor": {"regex": "│$", "row": 5}},
+    {"text": "lines of code\nread / changed", "side": "below", "anchor": {"regex": "\\d+\\.\\dK\\s+\\S\\s+\\d+\\.\\dK(?=\\s+│)", "row": 5}},
+    {"text": "cost for\nsession & day", "side": "below", "anchor": {"regex": "\\$[\\d.]+ / \\$[\\d.]+"}},
+    {"text": "plugins &\nskills", "side": "below", "anchor": {"regex": "[\\w,-]+ \\|"}}
+  ]
+}

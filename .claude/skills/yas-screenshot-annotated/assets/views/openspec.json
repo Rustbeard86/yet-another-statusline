@@ -1,0 +1,21 @@
+{
+  "scenario": "openspec",
+  "frame": "openspec view",
+  "labels": [
+    {"text": "repo dir/git info", "side": "above", "anchor": {"regex": "~/\\S+ ∈ \\S+", "offset": [-10, 0]}},
+    {"text": "session ID", "side": "above", "anchor": {"regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "offset": [10, 0]}},
+    {"text": "session\nelapsed time", "side": "above", "anchor": {"regex": "\\+\\d+:\\d\\d", "row": 1}},
+    {"text": "time until\n5h reset", "side": "above", "anchor": {"regex": "\\(-\\d+:\\d\\d\\)", "row": 1}},
+    {"text": "5h limit\nused", "side": "above", "anchor": {"regex": "(?<![-+\\d])\\d+\\.\\d%", "row": 1, "occurrence": 1}},
+    {"text": "5 hour\nburn rate", "side": "above", "anchor": {"regex": "[-+]\\d+\\.\\d%", "row": 1, "occurrence": 1}},
+    {"text": "7d limit\nused", "side": "above", "anchor": {"regex": "(?<![-+\\d])\\d+\\.\\d%", "row": 1, "occurrence": 2}},
+    {"text": "7 day\nburn rate", "side": "above", "anchor": {"regex": "[-+]\\d+\\.\\d%", "row": 1, "occurrence": 2}},
+    {"text": "cache\ncountdown", "side": "above", "anchor": {"regex": "-\\d{2}:\\d{2}"}},
+    {"text": "model / thinking\n(changes colour)", "side": "above", "anchor": {"regex": "[A-Z][a-z]+ \\d+\\.\\d+ \\(\\w+\\)"}},
+    {"text": "context\nwindow", "side": "left", "anchor": {"regex": "\\d+\\.\\dK \\(\\d+%\\)", "row": 3}},
+    {"text": "tokens, session / today:\ninput (incl. cache writes),\n(cache reads), output", "side": "left", "anchor": {"regex": "[\\d.]+[KM]/[\\d.]+[KM]", "row": 5, "occurrence": 1}},
+    {"text": "plugins &\nskills", "side": "right", "anchor": {"regex": "[\\w,-]+ \\|", "occurrence": 1, "offset": [38, 0]}},
+    {"text": "lines of code\nread / changed", "side": "right", "anchor": {"regex": "\\d+\\.\\dK\\s+\\S\\s+\\d+\\.\\dK(?=\\s+│)", "row": 5}},
+    {"text": "openspec\nspec progress", "side": "left", "anchor": {"regex": "(?<=│ )[a-z][\\w-]+", "occurrence": 1}}
+  ]
+}

@@ -643,6 +643,7 @@ def write_transcript(
     base_time: float | None = None,
     cache_anchor_secs_ago: float | None = None,
     cache_1h_tier: bool = False,
+    lines: tuple[int, int] | None = None,
 ) -> None:
     if base_time is None:
         base_time = time.time()
@@ -730,7 +731,39 @@ def write_transcript(
                     'content': [content],
                 },
             })
+    if lines is not None:
+        msgs.extend(_main_lines_entries(lines[0], lines[1], base_time))
     transcript.write_text('\n'.join(json.dumps(m) for m in msgs) + '\n')
+
+
+def _main_lines_entries(read_n: int, changed_n: int, base_time: float) -> list[dict[str, object]]:
+    'Main-session Read + Edit tool calls whose newline counts give lines read / changed.'
+    ts      = _iso(base_time - 60)
+    use_id  = 'tool_demo_main_lines_read'
+    content = '\n'.join(f'{n}\tline{n}' for n in range(1, read_n + 1)) + '\n'
+    use_blocks: list[dict[str, object]] = [
+        {'type': 'tool_use', 'id': use_id, 'name': 'Read', 'input': {'file_path': 'demo/main-lines.py'}},
+        {
+            'type':  'tool_use',
+            'name':  'Edit',
+            'input': {'file_path': 'demo/main-lines.py', 'old_string': 'x\n' * changed_n, 'new_string': 'y'},
+        },
+    ]
+    return [
+        {
+            'type':      'assistant',
+            'timestamp': ts,
+            'message':   {'id': 'msg_demo_main_lines', 'role': 'assistant', 'content': use_blocks},
+        },
+        {
+            'type':      'user',
+            'timestamp': ts,
+            'message':   {
+                'role':    'user',
+                'content': [{'type': 'tool_result', 'tool_use_id': use_id, 'content': content}],
+            },
+        },
+    ]
 
 
 def mutate_session_info(tmpdir: Path, session_id: str, raw: dict[str, object]) -> str:
@@ -947,6 +980,8 @@ class ScenarioConfig:
     cache_anchor_secs_ago: float | None      = None
     cache_1h_tier:         bool              = False
     columns:       int | None                = None
+    # Main-session (lines_read, lines_changed), written as Read + Edit tool calls.
+    lines:         tuple[int, int] | None    = None
 
 
 SCENARIOS: list[ScenarioConfig] = [
@@ -962,6 +997,7 @@ SCENARIOS: list[ScenarioConfig] = [
         five_hour_pct = 30.0,
         seven_day_pct = 20.0,
         cache_anchor_secs_ago = 30.0,
+        lines = (19_000, 2_700),
     ),
     ScenarioConfig(
         name        = 'opus-thinking',
@@ -1012,6 +1048,7 @@ SCENARIOS: list[ScenarioConfig] = [
         five_hour_pct = 46.0,
         seven_day_pct = 37.0,
         cache_anchor_secs_ago = 210.0,
+        lines = (12_400, 1_900),
     ),
     ScenarioConfig(
         name        = 'subagents',
@@ -1021,17 +1058,22 @@ SCENARIOS: list[ScenarioConfig] = [
         skills      = ['grill-me', 'caveman', 'tdd'],
         plugins     = ['openspec@0.1.0', 'frontend-design@0.3.2'],
         subagents   = [
-            ('explore',         'Search codebase - looking for token tracking', 3_200,   420, ('Bash', {'command': 'grep -rn "billed_in" claude/statusline_command.py'})),
-            ('general-purpose', 'Fix sparkline - update bucket algorithm',      8_700, 1_850, ('Edit', {'file_path': 'claude/statusline_command.py', 'old_string': 'a', 'new_string': 'b'})),
-            ('claude',          'Review border math implementation',            5_400,   980, ('Read', {'file_path': 'claude/statusline_command.py'})),
+            # Entry 1 spawns entries 2 and 3 (parent = 1-based index, 7th element).
+            # Entry 2 is finished (notification 'completed' -> check mark + strikethrough).
+            ('orchestrator',    'Coordinate the token tracking fix',            9_400,   2_100, ('Bash', {'command': 'openspec status --json'}), None, None, None, (640, 85)),
+            ('explore',         'Search codebase - looking for token tracking', 3_200,   420, ('Bash', {'command': 'grep -rn "billed_in" claude/statusline_command.py'}), None, 1, [('completed', 20)], (1_240, 0)),
+            ('general-purpose', 'Fix sparkline - update bucket algorithm',      8_700, 1_850, ('Edit', {'file_path': 'claude/statusline_command.py', 'old_string': 'a', 'new_string': 'b'}), None, 1, None, (310, 142)),
+            ('claude',          'Review border math implementation',            5_400,   980, ('Read', {'file_path': 'claude/statusline_command.py'}), None, None, [('completed', 45)], (420, 18)),
             # Text-only latest message -> the replying-snippet path. Medium
             # snippet (~50 cols) now shows in full past the old 36-col cap.
-            ('narrator',        'Narrate progress on the gradient fix',         4_100,   610, ('text', 'Tracing the off-by-one in the gradient border math')),
+            ('narrator',        'Narrate progress on the gradient fix',         4_100,   610, ('text', 'Tracing the off-by-one in the gradient border math'), None, None, None, (96, 0)),
             # Long snippet (>100 cols) -> exercises the 100-col ceiling + ellipsis.
-            ('reviewer',        'Summarise the border-math review',             6_300, 1_120, ('text', 'Investigating why the gradient border shifts a column under load and patching the off-by-one before the snapshot diff settles')),
+            ('reviewer',        'Summarise the border-math review',             6_300, 1_120, ('text', 'Investigating why the gradient border shifts a column under load and patching the off-by-one before the snapshot diff settles'), None, None, None, (780, 24)),
         ],
         five_hour_pct = 46.0,
         seven_day_pct = 37.0,
+        cache_anchor_secs_ago = 120.0,
+        lines = (19_000, 2_700),
     ),
     ScenarioConfig(
         name        = 'workflows',
@@ -1675,6 +1717,7 @@ def render_scenario(
         tasks=cfg.tasks or None,
         cache_anchor_secs_ago=cfg.cache_anchor_secs_ago,
         cache_1h_tier=cfg.cache_1h_tier,
+        lines=cfg.lines,
     )
     write_settings(claude, cfg.plugins)
     yas_toml_path = claude / 'yas.toml'
