@@ -410,3 +410,53 @@ class TestInstallerHookOps:
 
         # assert
         assert result == expected
+
+    def test_wire_empty_hook_removes_yas_entry_keeps_foreign(self, tmp_path):
+        # setup
+        settings = tmp_path / 'settings.json'
+        settings.write_text(json.dumps({
+            'hooks': {'UserPromptSubmit': [
+                _FOREIGN,
+                {'matcher': '', 'hooks': [{'type': 'command', 'command': _HOOK_CMD}]},
+            ]},
+        }))
+
+        # run
+        result = json.loads(_run_json_py('wire', settings, _STATUSLINE_CMD, ''))
+
+        # assert
+        assert result['hooks'] == {'UserPromptSubmit': [_FOREIGN]}
+        assert result['statusLine']['command'] == _STATUSLINE_CMD
+
+    def test_wire_empty_hook_collapses_empty_containers(self, tmp_path):
+        # setup
+        settings = tmp_path / 'settings.json'
+        settings.write_text(json.dumps({
+            'hooks': {'UserPromptSubmit': [
+                {'matcher': '', 'hooks': [{'type': 'command', 'command': _HOOK_CMD}]},
+            ]},
+        }))
+
+        # run
+        result = json.loads(_run_json_py('wire', settings, _STATUSLINE_CMD, ''))
+
+        # assert
+        assert 'hooks' not in result
+
+    @pytest.mark.parametrize(('enabled', 'expected'), [
+        ({'yas@yet-another-statusline': True}, '1'),
+        ({'yas@some-fork': True}, '1'),
+        ({'yas@yet-another-statusline': False}, ''),
+        ({'yasx@other': True, 'other@yas': True}, ''),
+        (None, ''),
+    ])
+    def test_plugin_enabled(self, tmp_path, enabled, expected):
+        # setup
+        settings = tmp_path / 'settings.json'
+        settings.write_text(json.dumps({} if enabled is None else {'enabledPlugins': enabled}))
+
+        # run
+        result = _run_json_py('plugin-enabled', settings).strip()
+
+        # assert
+        assert result == expected
