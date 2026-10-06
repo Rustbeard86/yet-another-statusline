@@ -136,6 +136,12 @@ TRANSCRIPT_CACHE_VERSION   = 2
 TRANSCRIPT_CACHE_KEEP_SECONDS = 86400.0  # 24 h — comfortably beyond ABANDONED_HORIZON_SECONDS = 1800
 TRANSCRIPT_CACHE_SUBKEY_MAX = 4          # max sub-keys retained per transcript per result kind
 DEFAULT_TRANSCRIPT_CACHE   = True
+# Hard cap on one statusline/hook process's lifetime. On Windows, Claude Code
+# cancels a render by killing its bash.exe, not the process tree; the orphaned
+# python then blocks in sys.stdin.read() for as long as the session holds the
+# pipe open, so they pile up. A cold parse of a 39 MB transcript takes ~1.1 s,
+# so 10 s never cuts off a real render. hooks/yas-prompt-hook.py duplicates it.
+WATCHDOG_SECONDS           = 10.0
 # Default per-component weights for the [rate_limits] simulator's usage sum
 # (yas.tokens.RateLimitLog.usage_since). Mirror the public API's per-token
 # PRICING ratios (https://platform.claude.com/docs/en/about-claude/pricing#model-pricing):
