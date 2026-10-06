@@ -444,10 +444,10 @@ class TestInstallerHookOps:
         assert 'hooks' not in result
 
     @pytest.mark.parametrize(('enabled', 'expected'), [
-        ({'yas@yet-another-statusline': True}, '1'),
-        ({'yas@some-fork': True}, '1'),
+        ({'yas@yet-another-statusline': True}, 'yet-another-statusline'),
+        ({'yas@some-fork': True}, 'some-fork'),
         ({'yas@yet-another-statusline': False}, ''),
-        ({'yasx@other': True, 'other@yas': True}, ''),
+        ({'yasx@other': True, 'other@yas': True, 'yas': True}, ''),
         (None, ''),
     ])
     def test_plugin_enabled(self, tmp_path, enabled, expected):
@@ -457,6 +457,22 @@ class TestInstallerHookOps:
 
         # run
         result = _run_json_py('plugin-enabled', settings).strip()
+
+        # assert
+        assert result == expected
+
+    @pytest.mark.parametrize(('source', 'expected'), [
+        ({'source': 'directory', 'path': '/src/yas'}, '/src/yas'),
+        ({'source': 'github', 'repo': 'tmck-code/yet-another-statusline'}, ''),
+        (None, ''),
+    ])
+    def test_marketplace_dir(self, tmp_path, source, expected):
+        # setup
+        known = tmp_path / 'known_marketplaces.json'
+        known.write_text(json.dumps({} if source is None else {'yas-mkt': {'source': source}}))
+
+        # run
+        result = _run_json_py('marketplace-dir', known, 'yas-mkt').strip()
 
         # assert
         assert result == expected

@@ -562,13 +562,24 @@ elif op == "wire":
     sys.stdout.write(json.dumps(data, indent=2))
 
 elif op == "plugin-enabled":
-    # plugin-enabled FILE   print 1 if .enabledPlugins enables a "yas@<marketplace>" key
+    # plugin-enabled FILE   print <marketplace> of every enabled "yas@<marketplace>"
+    #                       .enabledPlugins key, one per line (empty if none)
     data = load(sys.argv[2])
     plugins = data.get("enabledPlugins") if isinstance(data, dict) else None
-    on = isinstance(plugins, dict) and any(
-        str(k).split("@", 1)[0] == "yas" and v is True for k, v in plugins.items()
-    )
-    sys.stdout.write("1\n" if on else "")
+    if isinstance(plugins, dict):
+        for k, v in plugins.items():
+            name, _, mkt = str(k).partition("@")
+            if name == "yas" and mkt and v is True:
+                sys.stdout.write(mkt + "\n")
+
+elif op == "marketplace-dir":
+    # marketplace-dir FILE NAME   print the source path of known marketplace NAME
+    #                             when it is a local directory (empty otherwise)
+    data = load(sys.argv[2])
+    entry = data.get(sys.argv[3]) if isinstance(data, dict) else None
+    src = entry.get("source") if isinstance(entry, dict) else None
+    if isinstance(src, dict) and src.get("source") == "directory" and src.get("path"):
+        sys.stdout.write(str(src["path"]) + "\n")
 
 elif op == "get-hook":
     # get-hook FILE   print the current YAS hook command (empty if absent)
@@ -985,16 +996,21 @@ do_wire() {
     # An enabled plugin already registers the prompt hook via its hooks.json.
     # A second copy in settings.json fires it twice per prompt, and settings.json
     # hooks are also run by other agents that read Claude Code's config (e.g.
-    # Cursor's third-party hooks), which plugin hooks are not. Only a root
-    # outside the plugin cache (git clone, `make dev/wire`) needs the copy.
-    local PLUGIN_HOOKS=0
-    case "$PLUGIN_ROOT" in
-        */plugins/cache/*|*\\plugins\\cache\\*)
-            if [ -f "$PLUGIN_ROOT/hooks/hooks.json" ] \
-                && [ "$(json_py plugin-enabled "$SETTINGS" 2>/dev/null)" = "1" ]; then
-                PLUGIN_HOOKS=1
-            fi ;;
-    esac
+    # Cursor's third-party hooks), which plugin hooks are not. Claude Code runs
+    # the plugin from the plugin cache, or in place from a local-directory
+    # marketplace; any other root (git clone, `make dev/wire`) needs the copy.
+    local PLUGIN_HOOKS=0 YAS_MKT MKT_DIR
+    YAS_MKT=$(json_py plugin-enabled "$SETTINGS" 2>/dev/null | head -1)
+    if [ -n "$YAS_MKT" ] && [ -f "$PLUGIN_ROOT/hooks/hooks.json" ]; then
+        case "$PLUGIN_ROOT" in
+            */plugins/cache/*|*\\plugins\\cache\\*) PLUGIN_HOOKS=1 ;;
+        esac
+        MKT_DIR=$(json_py marketplace-dir "$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json" "$YAS_MKT" 2>/dev/null)
+        if [ -n "$MKT_DIR" ] \
+            && [ "$(cd "$MKT_DIR" 2>/dev/null && pwd -P)" = "$(cd "$PLUGIN_ROOT" && pwd -P)" ]; then
+            PLUGIN_HOOKS=1
+        fi
+    fi
 
     # Legacy cleanup
     for f in "$CLAUDE_CONFIG_DIR"/statusline-info-*; do
